@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ArrowLeft, TrendingUp, Brain, Zap, Activity, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -7,6 +7,7 @@ import { Slider } from './ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import AIAgent from './AIAgent';
+import SuggestedPrompts from './SuggestedPrompts';
 
 interface ForecastingDashboardProps {
   onNavigate: (screen: 'landing' | 'gdp' | 'gsbpm' | 'forecasting') => void;
@@ -79,95 +80,89 @@ const modelInventory = [
   { name: 'Inflation Prediction Model', riskLevel: 'medium', accuracy: 89.5, status: 'Review', lastValidation: '2024-09-15' },
 ];
 
-const demoConversation = [
-  {
-    userMessage: 'Can you show me GDP forecasts for the next quarters?',
-    agent: 'Forecaster',
-    assistantMessage: "I've accessed our forecasting suite. Please refer to Diagram <GDP Forecasting Models>. We maintain multiple models: ARIMA time-series model, Vector Autoregression (VAR) for multi-sector forecasting, and machine learning ensemble models. Current forecasts show GDP growth of 3.8% for Q1 2025 and 4.1% for Q2 2025, with 95% confidence intervals.",
-    highlightForecast: true,
-    switchToForecast: true,
-  },
-  {
-    userMessage: "What's the accuracy of these models and how are they governed?",
-    agent: 'Data Quality Checker',
-    assistantMessage: "Please refer to Diagram <Model Performance & Governance>. Our GDP forecasting models achieved 94.2% accuracy (MAPE) over the last 8 quarters. All models follow our Model Governance Framework: quarterly validation, bias testing, version control, and approval workflows. Model risk is classified as Medium, with monthly monitoring by the Model Oversight Committee.",
-    highlightGovernance: true,
-    switchToGovernance: true,
-  },
-  {
-    userMessage: 'Run a scenario analysis - what if oil prices increase by 20% next quarter?',
-    agent: 'Forecaster',
-    assistantMessage: "Running scenario simulation across all models. Please refer to Diagram <Scenario Impact Analysis>. With a 20% oil price increase, our ensemble model projects GDP growth would accelerate to 5.0%, with the oil & gas sector contributing an additional 0.5 percentage points. The VAR model shows secondary effects on construction and real estate sectors.",
-    highlightScenario: true,
-    switchToScenario: true,
-    setOilPrice: 20,
-  },
+const suggestedPrompts = [
+  'Show me GDP forecasts',
+  'Model accuracy & governance',
+  'Run scenario: oil price +20%',
+  'Compare forecasting models',
 ];
 
 export default function ForecastingDashboard({ onNavigate, demoMode }: ForecastingDashboardProps) {
   const [oilPriceChange, setOilPriceChange] = useState([0]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([{
+    role: 'assistant',
+    message: 'Welcome to the Forecasting Dashboard! I can show you GDP forecasts, model governance details, and run scenario analyses. What would you like to explore?',
+    agent: 'Forecaster',
+  }]);
   const [chatInput, setChatInput] = useState('');
-  const [conversationStep, setConversationStep] = useState(0);
   const [currentTab, setCurrentTab] = useState('forecast');
   const [highlightForecast, setHighlightForecast] = useState(false);
   const [highlightGovernance, setHighlightGovernance] = useState(false);
   const [highlightScenario, setHighlightScenario] = useState(false);
 
-  // Demo mode conversation flow
-  useEffect(() => {
-    if (demoMode && conversationStep < demoConversation.length) {
-      const timer = setTimeout(() => {
-        const step = demoConversation[conversationStep];
-        
-        // Clear previous highlights
-        setHighlightForecast(false);
-        setHighlightGovernance(false);
-        setHighlightScenario(false);
+  const handlePromptSelect = (prompt: string) => {
+    setChatInput(prompt);
+    handleSend(prompt);
+  };
 
-        // Add user message
-        setMessages(prev => [...prev, {
-          role: 'user',
-          message: step.userMessage,
-        }]);
-
-        // Add assistant response after delay
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            message: step.assistantMessage,
-            agent: step.agent,
-          }]);
-
-          // Switch tabs and apply highlights
-          if (step.switchToForecast) setCurrentTab('forecast');
-          if (step.switchToGovernance) setCurrentTab('governance');
-          if (step.switchToScenario) {
-            setCurrentTab('scenario');
-            if (step.setOilPrice) setOilPriceChange([step.setOilPrice]);
-          }
-
-          if (step.highlightForecast) setHighlightForecast(true);
-          if (step.highlightGovernance) setHighlightGovernance(true);
-          if (step.highlightScenario) setHighlightScenario(true);
-
-          // Clear highlights after 5 seconds
-          setTimeout(() => {
-            setHighlightForecast(false);
-            setHighlightGovernance(false);
-            setHighlightScenario(false);
-          }, 5000);
-
-          setConversationStep(prev => prev + 1);
-        }, 2000);
-      }, conversationStep === 0 ? 2000 : 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [demoMode, conversationStep]);
-
-  const handleSend = () => {
-    if (!chatInput.trim() || demoMode) return;
+  const handleSend = (inputText?: string) => {
+    const text = inputText || chatInput;
+    if (!text.trim()) return;
+    
+    setMessages(prev => [...prev, {
+      role: 'user',
+      message: text,
+    }]);
     setChatInput('');
+
+    // Clear previous highlights
+    setHighlightForecast(false);
+    setHighlightGovernance(false);
+    setHighlightScenario(false);
+
+    // Process query and respond
+    setTimeout(() => {
+      const lowerText = text.toLowerCase();
+      
+      if (lowerText.includes('forecast') && !lowerText.includes('scenario')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: "I've accessed our forecasting suite. Please refer to Diagram <GDP Forecasting Models>. We maintain multiple models: ARIMA time-series model, Vector Autoregression (VAR) for multi-sector forecasting, and machine learning ensemble models. Current forecasts show GDP growth of 3.8% for Q1 2025 and 4.1% for Q2 2025, with 95% confidence intervals.",
+          agent: 'Forecaster',
+        }]);
+        setCurrentTab('forecast');
+        setHighlightForecast(true);
+        setTimeout(() => setHighlightForecast(false), 5000);
+      } else if (lowerText.includes('accuracy') || lowerText.includes('governance') || lowerText.includes('model')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: "Please refer to Diagram <Model Performance & Governance>. Our GDP forecasting models achieved 94.2% accuracy (MAPE) over the last 8 quarters. All models follow our Model Governance Framework: quarterly validation, bias testing, version control, and approval workflows. Model risk is classified as Medium, with monthly monitoring by the Model Oversight Committee.",
+          agent: 'Data Quality Checker',
+        }]);
+        setCurrentTab('governance');
+        setHighlightGovernance(true);
+        setTimeout(() => setHighlightGovernance(false), 5000);
+      } else if (lowerText.includes('scenario') || lowerText.includes('oil')) {
+        const oilMatch = text.match(/(\+|\-)?(\d+)%/);
+        const oilChange = oilMatch ? parseInt(oilMatch[2]) * (oilMatch[1] === '-' ? -1 : 1) : 20;
+        
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: `Running scenario simulation across all models. Please refer to Diagram <Scenario Impact Analysis>. With a ${oilChange}% oil price ${oilChange > 0 ? 'increase' : 'decrease'}, our ensemble model projects GDP growth would ${oilChange > 0 ? 'accelerate' : 'decelerate'} to ${(3.2 + oilChange * 0.085).toFixed(1)}%, with the oil & gas sector contributing an additional ${(oilChange * 0.025).toFixed(1)} percentage points.`,
+          agent: 'Forecaster',
+        }]);
+        setCurrentTab('scenario');
+        setOilPriceChange([oilChange]);
+        setHighlightScenario(true);
+        setTimeout(() => setHighlightScenario(false), 5000);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: "I can help you explore GDP forecasts, model governance, or run scenario analyses. Try asking about forecasts, model accuracy, or scenario simulations.",
+          agent: 'Forecaster',
+        }]);
+      }
+    }, 800);
   };
 
   const scenarioData = historicalAndForecast.map(item => ({
@@ -548,8 +543,10 @@ export default function ForecastingDashboard({ onNavigate, demoMode }: Forecasti
               messages={messages}
               input={chatInput}
               onInputChange={setChatInput}
-              onSend={handleSend}
-            />
+              onSend={() => handleSend()}
+            >
+              <SuggestedPrompts prompts={suggestedPrompts} onSelect={handlePromptSelect} />
+            </AIAgent>
           </div>
         </div>
       </div>

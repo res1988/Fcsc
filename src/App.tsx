@@ -6,7 +6,7 @@ import ForecastingDashboard from './components/ForecastingDashboard';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'landing' | 'gdp' | 'gsbpm' | 'forecasting'>('landing');
-  const [demoMode, setDemoMode] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
 
   return (
     <div className="size-full bg-background">

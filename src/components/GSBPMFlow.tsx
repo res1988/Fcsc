@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ArrowLeft, FileText, CheckCircle2, AlertTriangle, TrendingUp } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -7,6 +7,7 @@ import { Progress } from './ui/progress';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import AIAgent from './AIAgent';
 import ProgressiveReport from './ProgressiveReport';
+import SuggestedPrompts from './SuggestedPrompts';
 
 interface GSBPMFlowProps {
   onNavigate: (screen: 'landing' | 'gdp' | 'gsbpm' | 'forecasting') => void;
@@ -79,80 +80,78 @@ const qualityIndicators = [
   { name: 'Relevance', score: 90, status: 'good' },
 ];
 
-const demoConversation = [
-  {
-    userMessage: 'How do we actually collect all this GDP data?',
-    agent: 'Data Quality Checker',
-    assistantMessage: 'FCSC follows the Generic Statistical Business Process Model (GSBPM) across all our surveys. Please refer to the highlighted diagram showing our main GDP surveys: Quarterly Economic Survey, Monthly Retail Trade Survey, Construction Survey, and Services Survey.',
-    highlightGSBPM: true,
-  },
-  {
-    userMessage: 'Show me coverage and response rates for our GDP surveys.',
-    agent: 'Data Quality Checker',
-    assistantMessage: 'Please refer to Diagram <GDP Survey Quality Metrics>. Our Quarterly Economic Survey covers 1,250 establishments (85% of GDP), with a 78% response rate. The Retail Trade Survey achieved 82% response rate last quarter, covering 92% of retail activity. All surveys meet international quality standards.',
-    highlightQuality: true,
-  },
-  {
-    userMessage: 'Generate a methodology report for our GDP survey framework.',
-    agent: 'Report Generator',
-    assistantMessage: 'Generating a comprehensive report covering our GDP survey portfolio, GSBPM compliance, data quality metrics, and alignment with international standards.',
-    showReport: true,
-  },
+const suggestedPrompts = [
+  'How do we collect GDP data?',
+  'Show me survey quality metrics',
+  'GSBPM process details',
+  'Generate methodology report',
 ];
 
 export default function GSBPMFlow({ onNavigate, demoMode }: GSBPMFlowProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([{
+    role: 'assistant',
+    message: 'Welcome to the GSBPM Workflow & Survey Quality dashboard! I can explain our data collection process, survey quality metrics, and generate methodology reports. What would you like to know?',
+    agent: 'Data Quality Checker',
+  }]);
   const [chatInput, setChatInput] = useState('');
-  const [conversationStep, setConversationStep] = useState(0);
   const [highlightGSBPM, setHighlightGSBPM] = useState(false);
   const [highlightQuality, setHighlightQuality] = useState(false);
   const [showReport, setShowReport] = useState(false);
 
-  // Demo mode conversation flow
-  useEffect(() => {
-    if (demoMode && conversationStep < demoConversation.length) {
-      const timer = setTimeout(() => {
-        const step = demoConversation[conversationStep];
-        
-        // Clear previous highlights
-        setHighlightGSBPM(false);
-        setHighlightQuality(false);
+  const handlePromptSelect = (prompt: string) => {
+    setChatInput(prompt);
+    handleSend(prompt);
+  };
 
-        // Add user message
-        setMessages(prev => [...prev, {
-          role: 'user',
-          message: step.userMessage,
-        }]);
-
-        // Add assistant response after delay
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            message: step.assistantMessage,
-            agent: step.agent,
-          }]);
-
-          // Apply highlights
-          if (step.highlightGSBPM) setHighlightGSBPM(true);
-          if (step.highlightQuality) setHighlightQuality(true);
-          if (step.showReport) setShowReport(true);
-
-          // Clear highlights after 5 seconds
-          setTimeout(() => {
-            setHighlightGSBPM(false);
-            setHighlightQuality(false);
-          }, 5000);
-
-          setConversationStep(prev => prev + 1);
-        }, 2000);
-      }, conversationStep === 0 ? 2000 : 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [demoMode, conversationStep]);
-
-  const handleSend = () => {
-    if (!chatInput.trim() || demoMode) return;
+  const handleSend = (inputText?: string) => {
+    const text = inputText || chatInput;
+    if (!text.trim()) return;
+    
+    setMessages(prev => [...prev, {
+      role: 'user',
+      message: text,
+    }]);
     setChatInput('');
+
+    // Clear previous highlights
+    setHighlightGSBPM(false);
+    setHighlightQuality(false);
+
+    // Process query and respond
+    setTimeout(() => {
+      const lowerText = text.toLowerCase();
+      
+      if (lowerText.includes('collect') || lowerText.includes('gsbpm') || lowerText.includes('process')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: 'FCSC follows the Generic Statistical Business Process Model (GSBPM) across all our surveys. Please refer to the highlighted diagram showing our main GDP surveys: Quarterly Economic Survey, Monthly Retail Trade Survey, Construction Survey, and Services Survey.',
+          agent: 'Data Quality Checker',
+        }]);
+        setHighlightGSBPM(true);
+        setTimeout(() => setHighlightGSBPM(false), 5000);
+      } else if (lowerText.includes('quality') || lowerText.includes('coverage') || lowerText.includes('response')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: 'Please refer to Diagram <GDP Survey Quality Metrics>. Our Quarterly Economic Survey covers 1,250 establishments (85% of GDP), with a 78% response rate. The Retail Trade Survey achieved 82% response rate last quarter, covering 92% of retail activity. All surveys meet international quality standards.',
+          agent: 'Data Quality Checker',
+        }]);
+        setHighlightQuality(true);
+        setTimeout(() => setHighlightQuality(false), 5000);
+      } else if (lowerText.includes('report') || lowerText.includes('methodology')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: 'Generating a comprehensive report covering our GDP survey portfolio, GSBPM compliance, data quality metrics, and alignment with international standards.',
+          agent: 'Report Generator',
+        }]);
+        setShowReport(true);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: 'I can help you understand our GSBPM process, survey quality metrics, or generate methodology reports. Try asking about data collection, quality metrics, or request a report.',
+          agent: 'Data Quality Checker',
+        }]);
+      }
+    }, 800);
   };
 
   return (
@@ -342,8 +341,10 @@ export default function GSBPMFlow({ onNavigate, demoMode }: GSBPMFlowProps) {
           messages={messages}
           input={chatInput}
           onInputChange={setChatInput}
-          onSend={handleSend}
-        />
+          onSend={() => handleSend()}
+        >
+          <SuggestedPrompts prompts={suggestedPrompts} onSelect={handlePromptSelect} />
+        </AIAgent>
       </div>
     </div>
       </div>

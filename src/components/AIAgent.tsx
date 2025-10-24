@@ -18,6 +18,7 @@ interface AIAgentProps {
   onInputChange: (value: string) => void;
   onSend: () => void;
   onDownload?: (messageIndex: number) => void;
+  children?: React.ReactNode;
 }
 
 const agentIcons: Record<string, string> = {
@@ -31,7 +32,7 @@ const agentIcons: Record<string, string> = {
   'KPI Explainer': '💡',
 };
 
-export default function AIAgent({ messages, input, onInputChange, onSend, onDownload }: AIAgentProps) {
+export default function AIAgent({ messages, input, onInputChange, onSend, onDownload, children }: AIAgentProps) {
   return (
     <Card className="p-6 acrylic elevation-2 border-border/50 h-[calc(100vh-140px)] flex flex-col">
       <div className="flex items-center gap-2 mb-4 pb-4 border-b border-border/50">
@@ -43,6 +44,9 @@ export default function AIAgent({ messages, input, onInputChange, onSend, onDown
           <p className="text-muted-foreground text-xs">Powered by multiple specialized agents</p>
         </div>
       </div>
+
+      {/* Suggested Prompts */}
+      {children}
 
       <ScrollArea className="flex-1 pr-4">
         <div className="space-y-4">

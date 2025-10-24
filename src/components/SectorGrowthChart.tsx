@@ -16,12 +16,17 @@ const sectorGrowthData = [
 ];
 
 export default function SectorGrowthChart({ highlighted }: SectorGrowthChartProps) {
+  const sectorGrowthData = getSectorGrowthComparison();
+
   return (
     <Card className={`p-6 acrylic elevation-2 border-border/50 mb-6 transition-all duration-500 ${
       highlighted ? 'ring-4 ring-primary shadow-xl' : ''
     }`}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-foreground">Year-over-Year Sector Growth Comparison</h3>
+        <div>
+          <h3 className="text-foreground">Year-over-Year Sector Growth Comparison</h3>
+          <p className="text-muted-foreground text-xs mt-1">Key sectors • 2023 vs 2024</p>
+        </div>
         {highlighted && (
           <div className="px-3 py-1 bg-accent/80 text-primary text-sm rounded-full animate-pulse elevation-1">
             AI Highlighted

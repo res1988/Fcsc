@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, DollarSign, Users, BarChart3, TrendingUp } from 'lucide-react';
+import { ArrowLeft, DollarSign, Users, BarChart3, TrendingUp, Database } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import { Badge } from './ui/badge';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import GDPTreemap from './GDPTreemap';
 import SectorGrowthChart from './SectorGrowthChart';
@@ -9,6 +10,8 @@ import SectorRankingChart from './SectorRankingChart';
 import RetailWholesaleDetail from './RetailWholesaleDetail';
 import AIAgent from './AIAgent';
 import ProgressiveReport from './ProgressiveReport';
+import SuggestedPrompts from './SuggestedPrompts';
+import { getGDPSectoralBreakdown, getGDPTrajectory, validateGDPData, type GDPDataOutput } from '../services/gdpDataService';
 
 interface GDPDashboardProps {
   onNavigate: (screen: 'landing' | 'gdp' | 'gsbpm' | 'forecasting') => void;
@@ -35,63 +38,25 @@ const gdpHistoricalData = [
   { year: '2024', gdp: 1.60 },
 ];
 
-const demoConversation = [
-  {
-    user: 'initial',
-    userMessage: '',
-    agent: 'Dashboard Manager',
-    assistantMessage: 'Sure, let me show you the comprehensive overview of UAE GDP.',
-  },
-  {
-    user: 'Show me how different sectors are contributing to our GDP.',
-    userMessage: 'Show me how different sectors are contributing to our GDP.',
-    agent: 'Diagram Generator',
-    assistantMessage: 'Please refer to Diagram <Sectoral Contribution Breakdown>. This shows the breakdown across all key sectors including manufacturing, services, oil & gas, construction, real estate, and others, with their respective percentage contributions and absolute values. A focus on retail and wholesale is highlighted.',
-    highlightTreemap: true,
-  },
-  {
-    user: 'I want to see the year-over-year growth for each sector - which sectors are accelerating and which are slowing down?',
-    userMessage: 'I want to see the year-over-year growth for each sector - which sectors are accelerating and which are slowing down?',
-    agent: 'Diagram Generator',
-    assistantMessage: "I've generated a sectoral growth comparison chart. Please refer to the highlighted diagram showing growth rates for manufacturing, services, and other key sectors, comparing current year performance with previous years.",
-    highlightGrowthChart: true,
-  },
-  {
-    user: 'Focus on Retail and Wholesale - show me the detailed breakdown of the manufacturing sector\'s contribution and its growth trend over the last 5 years.',
-    userMessage: 'Focus on Retail and Wholesale - show me the detailed breakdown of the Retail and Wholesale sector\'s contribution and its growth trend over the last 5 years.',
-    agent: 'Data Searcher',
-    assistantMessage: "Please refer to Diagram <Retail / Wholesale>. This shows Retail / Wholesale contribution to GDP over the past 5 years, with absolute values, growth rates, and sub-sector breakdown where available.",
-    showRetailDetail: true,
-    highlightRetailDetail: true,
-  },
-  {
-    user: 'Which sector showed the strongest growth in the last fiscal year?',
-    userMessage: 'Which sector showed the strongest growth in the last fiscal year?',
-    agent: 'Comparative Benchmarker',
-    assistantMessage: "I've analyzed all sectors. Please refer to the highlighted diagram. The Real Estate sector showed the strongest growth at 6.2%, followed by Manufacturing at 5.1%. Here's a detailed comparison across all sectors.",
-    showRankingChart: true,
-    highlightRankingChart: true,
-  },
-  {
-    user: 'Compare our services sector growth with the previous 3 years. Is there a trend?',
-    userMessage: 'Compare our services sector growth with the previous 3 years. Is there a trend?',
-    agent: 'Comparative Benchmarker',
-    assistantMessage: "I've generated a services sector trend analysis. Please refer to the highlighted diagram showing 4-year comparative performance. The services sector has shown consistent growth with growth rates of 3.1%, 3.3%, 3.5%, and 4.2% respectively, indicating steady acceleration.",
-    highlightGrowthChart: true,
-  },
-  {
-    user: 'Generate me a report analyzing why Retail / Wholesale contribution to GDP changed in 2024. Include year-over-year comparisons.',
-    userMessage: 'Generate me a report analyzing why Retail / Wholesale contribution to GDP changed in 2024. Include year-over-year comparisons.',
-    agent: 'Report Generator',
-    assistantMessage: "Sure, a comprehensive analytical report is under generation. I'm analyzing Retail / Wholesale sector performance, comparing it with previous years, and identifying key factors influencing the change.",
-    showReport: true,
-  },
+const suggestedPrompts = [
+  'Show me sectoral contributions',
+  'Year-over-year growth comparison',
+  'Retail & Wholesale details',
+  'Which sector grew the most?',
+  'Services sector trends',
+  'Generate sector analysis report',
 ];
 
 export default function GDPDashboard({ onNavigate, demoMode }: GDPDashboardProps) {
+  const [gdpData, setGdpData] = useState<GDPDataOutput | null>(null);
+  const [trajectoryData, setTrajectoryData] = useState<any[]>([]);
+  const [dataValidation, setDataValidation] = useState<any>(null);
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [conversationStep, setConversationStep] = useState(0);
+  const [messages, setMessages] = useState<Message[]>([{
+    role: 'assistant',
+    message: 'Welcome to the GDP Analytics Dashboard! I can help you explore sectoral contributions, growth trends, and generate detailed reports. Data loaded from FCSA schema v3.4.0. Try asking me a question or click on a suggested prompt below.',
+    agent: 'Dashboard Manager',
+  }]);
   const [highlightTreemap, setHighlightTreemap] = useState(false);
   const [highlightGrowthChart, setHighlightGrowthChart] = useState(false);
   const [highlightRetailDetail, setHighlightRetailDetail] = useState(false);
@@ -100,89 +65,143 @@ export default function GDPDashboard({ onNavigate, demoMode }: GDPDashboardProps
   const [showRankingChart, setShowRankingChart] = useState(false);
   const [showReport, setShowReport] = useState(false);
 
-  // Initialize with AI agent intro in demo mode
+  // Load GDP data on mount
   useEffect(() => {
-    if (demoMode && messages.length === 0) {
-      const timer = setTimeout(() => {
-        setMessages([{
-          role: 'assistant',
-          message: demoConversation[0].assistantMessage,
-          agent: demoConversation[0].agent,
-        }]);
-        setConversationStep(1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [demoMode]);
-
-  // Demo mode conversation flow
-  useEffect(() => {
-    if (demoMode && conversationStep > 0 && conversationStep < demoConversation.length) {
-      const timer = setTimeout(() => {
-        const step = demoConversation[conversationStep];
-        
-        // Clear previous highlights
-        setHighlightTreemap(false);
-        setHighlightGrowthChart(false);
-        setHighlightRetailDetail(false);
-        setHighlightRankingChart(false);
-
-        // Add user message
-        setMessages(prev => [...prev, {
-          role: 'user',
-          message: step.userMessage,
-        }]);
-
-        // Add assistant response after delay
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            message: step.assistantMessage,
-            agent: step.agent,
-          }]);
-
-          // Apply highlights and show new diagrams
-          if (step.highlightTreemap) setHighlightTreemap(true);
-          if (step.highlightGrowthChart) setHighlightGrowthChart(true);
-          if (step.highlightRetailDetail) setHighlightRetailDetail(true);
-          if (step.highlightRankingChart) setHighlightRankingChart(true);
-          if (step.showRetailDetail) setShowRetailDetail(true);
-          if (step.showRankingChart) setShowRankingChart(true);
-          if (step.showReport) setShowReport(true);
-
-          // Clear highlights after 5 seconds
-          setTimeout(() => {
-            setHighlightTreemap(false);
-            setHighlightGrowthChart(false);
-            setHighlightRetailDetail(false);
-            setHighlightRankingChart(false);
-          }, 5000);
-
-          setConversationStep(prev => prev + 1);
-        }, 2000);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [demoMode, conversationStep]);
-
-  const handleSend = () => {
-    if (!chatInput.trim() || demoMode) return;
+    const data = getGDPSectoralBreakdown();
+    const trajectory = getGDPTrajectory();
+    const validation = validateGDPData(data);
     
+    setGdpData(data);
+    setTrajectoryData(trajectory);
+    setDataValidation(validation);
+    
+    console.log('GDP Data loaded:', data);
+    console.log('Data validation:', validation);
+  }, []);
+
+  const handlePromptSelect = (prompt: string) => {
+    setChatInput(prompt);
+    handleSend(prompt);
+  };
+
+  const handleSend = (inputText?: string) => {
+    const text = inputText || chatInput;
+    if (!text.trim()) return;
+    
+    // Add user message
     setMessages(prev => [...prev, {
       role: 'user',
-      message: chatInput,
+      message: text,
     }]);
     setChatInput('');
 
-    // Add mock response
+    // Clear previous highlights
+    setHighlightTreemap(false);
+    setHighlightGrowthChart(false);
+    setHighlightRetailDetail(false);
+    setHighlightRankingChart(false);
+
+    // Process query and respond
     setTimeout(() => {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        message: "I've analyzed your request. Here's the information you requested.",
-        agent: 'Data Searcher',
-      }]);
-    }, 1000);
+      const lowerText = text.toLowerCase();
+      
+      if (!gdpData) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: 'Loading GDP data... Please wait.',
+          agent: 'Data Searcher',
+        }]);
+        return;
+      }
+
+      if (lowerText.includes('validat') || lowerText.includes('quality')) {
+        const validMsg = dataValidation?.valid 
+          ? `✅ Data validation passed! All ${gdpData.sectors.length} sectors loaded successfully. ${dataValidation.warnings.length > 0 ? `Warnings: ${dataValidation.warnings.join('; ')}` : ''}` 
+          : `⚠️ Data validation issues: ${dataValidation?.errors.join('; ')}`;
+        
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: `Data Quality Report:\n\n${validMsg}\n\nData Source: ${gdpData.metadata.dataSource}\nPrice Type: ${gdpData.metadata.priceType}\nTotal GDP: AED ${(gdpData.metadata.totalGDP / 1000).toFixed(2)}B\nDiversification Index: ${gdpData.insights.diversificationIndex} (${gdpData.insights.topSectorDominance} dominance)`,
+          agent: 'Data Quality Checker',
+        }]);
+      } else if (lowerText.includes('sector') && (lowerText.includes('contribution') || lowerText.includes('breakdown'))) {
+        const topSector = gdpData.sectors[0];
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: `Please refer to Diagram <Sectoral Contribution Breakdown>. Analysis of ${gdpData.sectors.length} sectors from ${gdpData.metadata.dataSource}. Top contributor: ${topSector.name} (${topSector.percentage}%). Oil sector: ${gdpData.aggregates.oilSector.percentage}%, Non-oil: ${gdpData.aggregates.nonOilSector.percentage}%.`,
+          agent: 'Diagram Generator',
+        }]);
+        setHighlightTreemap(true);
+        setTimeout(() => setHighlightTreemap(false), 5000);
+      } else if (lowerText.includes('growth') && (lowerText.includes('year') || lowerText.includes('comparison'))) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: "I've generated a sectoral growth comparison chart. Please refer to the highlighted diagram showing growth rates for manufacturing, services, and other key sectors, comparing current year performance with previous years.",
+          agent: 'Diagram Generator',
+        }]);
+        setHighlightGrowthChart(true);
+        setTimeout(() => setHighlightGrowthChart(false), 5000);
+      } else if (lowerText.includes('retail') || lowerText.includes('wholesale')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: "Please refer to Diagram <Retail / Wholesale>. This shows Retail / Wholesale contribution to GDP over the past 5 years, with absolute values, growth rates, and sub-sector breakdown.",
+          agent: 'Data Searcher',
+        }]);
+        setShowRetailDetail(true);
+        setHighlightRetailDetail(true);
+        setTimeout(() => setHighlightRetailDetail(false), 5000);
+      } else if (lowerText.includes('strongest') || lowerText.includes('most') || lowerText.includes('ranking')) {
+        const fastest = gdpData.insights.fastestGrowingSector;
+        const topThree = gdpData.sectors.slice(0, 3).map(s => `${s.name}: ${s.yoyGrowth}%`).join(', ');
+        
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: `I've analyzed all ${gdpData.sectors.length} sectors. Fastest growing: ${fastest.name} at ${fastest.growth}% YoY. Top 3 by size: ${topThree}. Please refer to the highlighted ranking diagram.`,
+          agent: 'Comparative Benchmarker',
+        }]);
+        setShowRankingChart(true);
+        setHighlightRankingChart(true);
+        setTimeout(() => setHighlightRankingChart(false), 5000);
+      } else if (lowerText.includes('services') && lowerText.includes('trend')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: "I've generated a services sector trend analysis. The services sector has shown consistent growth with growth rates of 3.1%, 3.3%, 3.5%, and 4.2% respectively, indicating steady acceleration.",
+          agent: 'Comparative Benchmarker',
+        }]);
+        setHighlightGrowthChart(true);
+        setTimeout(() => setHighlightGrowthChart(false), 5000);
+      } else if (lowerText.includes('report') || lowerText.includes('analysis')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: `Sure, generating comprehensive analytical report. Source: ${gdpData.metadata.dataSource}. Analyzing ${gdpData.sectors.length} sectors with diversification index of ${gdpData.insights.diversificationIndex}. Total GDP: AED ${(gdpData.metadata.totalGDP / 1000).toFixed(2)}B.`,
+          agent: 'Report Generator',
+        }]);
+        setShowReport(true);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          message: `I've analyzed your request. You can explore GDP data by asking about sectoral contributions, growth comparisons, specific sectors like Retail & Wholesale, data quality validation, or request detailed reports. Current dataset: ${gdpData.metadata.year} vs ${gdpData.metadata.comparisonYear}.`,
+          agent: 'Data Searcher',
+        }]);
+      }
+    }, 800);
   };
+
+  if (!gdpData) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="p-8 acrylic elevation-2">
+          <div className="flex items-center gap-3">
+            <Database className="w-8 h-8 text-primary animate-pulse" />
+            <div>
+              <h3 className="text-foreground">Loading GDP Data</h3>
+              <p className="text-muted-foreground text-sm">Processing FCSA schema v3.4.0...</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -197,14 +216,23 @@ export default function GDPDashboard({ onNavigate, demoMode }: GDPDashboardProps
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-1">
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-[#A08060] rounded-xl flex items-center justify-center elevation-2">
               <BarChart3 className="w-6 h-6 text-white" />
             </div>
             <div>
               <div className="text-foreground">GDP Analytics Dashboard</div>
-              <div className="text-muted-foreground text-sm">United Arab Emirates</div>
+              <div className="text-muted-foreground text-sm">United Arab Emirates • {gdpData.metadata.year}</div>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-accent/30 border-primary/20">
+              <Database className="w-3 h-3 mr-1" />
+              {gdpData.sectors.length} Sectors
+            </Badge>
+            <Badge variant={dataValidation?.valid ? "default" : "destructive"} className="bg-primary/10 text-primary border-primary/20">
+              {dataValidation?.valid ? '✓' : '⚠'} Schema v{gdpData.metadata.version}
+            </Badge>
           </div>
         </div>
       </header>
@@ -217,37 +245,36 @@ export default function GDPDashboard({ onNavigate, demoMode }: GDPDashboardProps
             <div className="grid grid-cols-3 gap-4 mb-6">
               <Card className="p-6 bg-gradient-to-br from-primary to-[#A08060] text-white border-0 elevation-2">
                 <div className="flex items-start justify-between mb-2">
-                  <div className="text-white/80 text-sm">Total GDP</div>
+                  <div className="text-white/80 text-sm">Total GDP ({gdpData.metadata.year})</div>
                   <DollarSign className="w-5 h-5 text-white/70" />
                 </div>
-                <div className="text-3xl mb-1">AED 1.6T</div>
+                <div className="text-3xl mb-1">AED {(gdpData.metadata.totalGDP / 1000).toFixed(2)}T</div>
                 <div className="flex items-center gap-1 text-white/80 text-sm">
                   <TrendingUp className="w-4 h-4" />
-                  +3.2% YoY
+                  {((gdpData.metadata.totalGDP / (gdpData.metadata.totalGDP / 1.032) - 1) * 100).toFixed(1)}% YoY
                 </div>
               </Card>
 
               <Card className="p-6 acrylic elevation-2 border-border/50">
                 <div className="flex items-start justify-between mb-2">
-                  <div className="text-muted-foreground text-sm">GDP Growth Rate</div>
+                  <div className="text-muted-foreground text-sm">Non-Oil GDP</div>
                   <TrendingUp className="w-5 h-5 text-[#6B9080]" />
                 </div>
-                <div className="text-3xl text-foreground mb-1">3.2%</div>
+                <div className="text-3xl text-foreground mb-1">{gdpData.aggregates.nonOilSector.percentage.toFixed(1)}%</div>
                 <div className="flex items-center gap-1 text-[#6B9080] text-sm">
                   <TrendingUp className="w-4 h-4" />
-                  +0.5% from 2023
+                  {gdpData.aggregates.nonOilSector.yoyGrowth.toFixed(1)}% growth
                 </div>
               </Card>
 
               <Card className="p-6 acrylic elevation-2 border-border/50">
                 <div className="flex items-start justify-between mb-2">
-                  <div className="text-muted-foreground text-sm">GDP per Capita</div>
+                  <div className="text-muted-foreground text-sm">Diversification</div>
                   <Users className="w-5 h-5 text-[#B5838D]" />
                 </div>
-                <div className="text-3xl text-foreground mb-1">AED 165K</div>
-                <div className="flex items-center gap-1 text-[#6B9080] text-sm">
-                  <TrendingUp className="w-4 h-4" />
-                  +2.8% YoY
+                <div className="text-3xl text-foreground mb-1">{gdpData.insights.diversificationIndex}</div>
+                <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                  {gdpData.insights.topSectorDominance} dominance
                 </div>
               </Card>
             </div>
@@ -282,7 +309,7 @@ export default function GDPDashboard({ onNavigate, demoMode }: GDPDashboardProps
             </Card>
 
             {/* Treemap */}
-            <GDPTreemap highlighted={highlightTreemap} />
+            <GDPTreemap highlighted={highlightTreemap} gdpData={gdpData} />
 
             {/* Sector Growth Comparison */}
             <SectorGrowthChart highlighted={highlightGrowthChart} />
@@ -318,8 +345,10 @@ export default function GDPDashboard({ onNavigate, demoMode }: GDPDashboardProps
               messages={messages}
               input={chatInput}
               onInputChange={setChatInput}
-              onSend={handleSend}
-            />
+              onSend={() => handleSend()}
+            >
+              <SuggestedPrompts prompts={suggestedPrompts} onSelect={handlePromptSelect} />
+            </AIAgent>
           </div>
         </div>
       </div>
